@@ -1,0 +1,122 @@
+name: CI / CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ── CI: Test ──────────────────────────────────────────────────────────────
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install -r app/requirements.txt
+
+      - name: Run tests
+        run: |
+          pytest app/test_app.py -v
+
+  # ── CI: Build & Push Docker image ─────────────────────────────────────────
+  build:
+    name: Build and push image
+    runs-on: ubuntu-latest
+    needs: test
+    # Only build on pushes to main (not PRs)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  # ── CD: Deploy to AWS EC2 ─────────────────────────────────────────────────
+  deploy:
+    name: Deploy to AWS
+    runs-on: ubuntu-latest
+    needs: build
+    environment: production   # requires manual approval in GitHub settings
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Deploy new container to EC2 instances
+        run: |
+          # Get instance IDs from Terraform output (stored as GitHub secret)
+          INSTANCE_IDS="${{ secrets.EC2_INSTANCE_IDS }}"
+
+          # Use AWS SSM to run deploy command on each instance
+          # (no SSH keys needed — SSM is the secure, modern approach)
+          for INSTANCE_ID in $INSTANCE_IDS; do
+            echo "Deploying to $INSTANCE_ID..."
+            aws ssm send-command \
+              --instance-ids "$INSTANCE_ID" \
+              --document-name "AWS-RunShellScript" \
+              --parameters commands='[
+                "docker pull ghcr.io/${{ github.repository }}:latest",
+                "docker stop cloud-api || true",
+                "docker rm cloud-api || true",
+                "docker run -d --name cloud-api --restart always -p 5000:5000 -e APP_ENV=prod ghcr.io/${{ github.repository }}:latest"
+              ]' \
+              --output text
+          done
+
+      - name: Verify deployment health
+        run: |
+          echo "Waiting 30s for containers to start..."
+          sleep 30
+          echo "Deployment complete. Check load balancer health in AWS console."
