@@ -1,6 +1,6 @@
 # Cloud Engineering Demo API
 
-![CI/CD](https://github.com/YOUR_USERNAME/cloud-api-project/actions/workflows/ci-cd.yml/badge.svg)
+![CI/CD](https://github.com/Dero-Tech/cloud-api-project/actions/workflows/ci-cd.yml/badge.svg)
 ![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)
 ![Docker](https://img.shields.io/badge/Docker-containerized-2496ED?logo=docker)
 ![Terraform](https://img.shields.io/badge/Terraform-IaC-7B42BC?logo=terraform)
@@ -44,7 +44,7 @@ A production-style REST API demonstrating cloud engineering fundamentals:
 
 ### CI/CD Pipeline (GitHub Actions)
 
-```
+git clone https://github.com/Dero-Tech/cloud-api-project.git
   Push to main
        │
        ▼
