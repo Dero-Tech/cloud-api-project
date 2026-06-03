@@ -19,5 +19,11 @@ variable "environment" {
 variable "instance_type" {
   description = "EC2 instance type"
   type        = string
-  default     = "t2.micro"
+  default     = "t3.micro"
+}
+
+variable "github_username" {
+  description = "GitHub username for pulling Docker image"
+  type        = string
+  default     = "Dero-Tech"
 }

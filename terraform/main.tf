@@ -10,10 +10,10 @@ terraform {
 
   # Remote state stored in S3 — keeps state safe and shareable
   backend "s3" {
-    bucket         = "cloud-api-tfstate"
+   bucket = "cloud-api-tfstate-592245847717"
     key            = "prod/terraform.tfstate"
     region         = "us-east-1"
-    dynamodb_table = "terraform-state-lock"
+   use_lockfile = true
     encrypt        = true
   }
 }
@@ -197,7 +197,8 @@ resource "aws_instance" "app_a" {
   iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
 
   user_data = base64encode(templatefile("${path.module}/templates/user_data.sh", {
-    app_env = var.environment
+    app_env         = var.environment
+    github_username = var.github_username
   }))
 
   tags = {
@@ -213,8 +214,9 @@ resource "aws_instance" "app_b" {
   vpc_security_group_ids = [aws_security_group.ec2.id]
   iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
 
-  user_data = base64encode(templatefile("${path.module}/templates/user_data.sh", {
-    app_env = var.environment
+user_data = base64encode(templatefile("${path.module}/templates/user_data.sh", {
+    app_env         = var.environment
+    github_username = var.github_username
   }))
 
   tags = {
