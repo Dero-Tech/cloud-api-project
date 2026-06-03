@@ -11,11 +11,9 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  # ── CI: Test ──────────────────────────────────────────────────────────────
   test:
     name: Run tests
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -26,28 +24,21 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: |
-          pip install -r app/requirements.txt
+        run: pip install -r app/requirements.txt
 
       - name: Run tests
-        run: |
-          pytest app/test_app.py -v
+        run: pytest app/test_app.py -v
 
-  # ── CI: Build & Push Docker image ─────────────────────────────────────────
   build:
     name: Build and push image
     runs-on: ubuntu-latest
     needs: test
-    # Only build on pushes to main (not PRs)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-
     permissions:
       contents: read
       packages: write
-
     outputs:
       image_tag: ${{ steps.meta.outputs.tags }}
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -76,32 +67,35 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-  # ── CD: Deploy to AWS EC2 ─────────────────────────────────────────────────
   deploy:
     name: Deploy to AWS
     runs-on: ubuntu-latest
     needs: build
-    environment: production   # requires manual approval in GitHub settings
-
+    environment: production
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Configure AWS credentials
-        - name: Deploy new container to EC2 instances
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Deploy new container to EC2 instances
         run: |
           aws ssm send-command \
             --instance-ids "i-0ee5c853b3434a55b" \
             --document-name "AWS-RunShellScript" \
             --parameters commands='["docker pull ghcr.io/${{ github.repository }}:latest && docker stop cloud-api || true && docker rm cloud-api || true && docker run -d --name cloud-api --restart always -p 5000:5000 ghcr.io/${{ github.repository }}:latest"]' \
             --region us-east-1
-
           aws ssm send-command \
             --instance-ids "i-0ede3bdd951665133" \
             --document-name "AWS-RunShellScript" \
             --parameters commands='["docker pull ghcr.io/${{ github.repository }}:latest && docker stop cloud-api || true && docker rm cloud-api || true && docker run -d --name cloud-api --restart always -p 5000:5000 ghcr.io/${{ github.repository }}:latest"]' \
             --region us-east-1
-          echo "Deploy commands sent successfully"
+          echo "Deploy commands sent to both instances"
 
       - name: Verify deployment health
-        run: echo "Deployment commands sent to both EC2 instances via SSM"
+        run: echo "Deployment complete"
