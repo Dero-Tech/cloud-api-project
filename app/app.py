@@ -1,8 +1,16 @@
 from flask import Flask, jsonify
+from prometheus_flask_exporter import PrometheusMetrics
 import os
 import datetime
 
 app = Flask(__name__)
+
+# This single line adds a /metrics endpoint and automatically
+# tracks request count, latency, and errors for every route
+metrics = PrometheusMetrics(app)
+
+# Static app info — shows up as a label in your metrics
+metrics.info('app_info', 'Cloud API Metrics', version='1.0.0')
 
 @app.route("/", methods=["GET"])
 def root():
@@ -29,7 +37,8 @@ def info():
             "containerization": "Docker",
             "infrastructure": "AWS (EC2, VPC, S3, Security Groups)",
             "iac": "Terraform",
-            "ci_cd": "GitHub Actions"
+            "ci_cd": "GitHub Actions",
+            "observability": "Prometheus + Grafana + CloudWatch"
         },
         "author": "David"
     })
